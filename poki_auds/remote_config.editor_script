@@ -13,7 +13,7 @@ local function get_config_file_path()
     if editor.can_get("/game.project", "poki_auds.remote_config_json_file") then
         return editor.get("/game.project", "poki_auds.remote_config_json_file")
     end
-    return "/remote_config.json"
+    return "remote_config.json"
 end
 
 --- Get path to secret file from game.project.
@@ -22,14 +22,17 @@ local function get_secret_file_path()
     if editor.can_get("/game.project", "poki_auds.remote_config_secret_file") then
         return editor.get("/game.project", "poki_auds.remote_config_secret_file")
     end
-    return "/remote_config.secret"
+    return "remote_config.secret"
 end
 
 --- Get remote config ID from game.project.
--- @return string|nil config id or nil if not found
+-- @return string|nil config id or nil if not found or empty
 local function get_remote_config_id()
     if editor.can_get("/game.project", "poki_auds.remote_config_id") then
-        return editor.get("/game.project", "poki_auds.remote_config_id")
+        local value = editor.get("/game.project", "poki_auds.remote_config_id")
+        if value and value ~= "" then
+            return value
+        end
     end
     return nil
 end
@@ -44,10 +47,13 @@ local function get_remote_config_key()
 end
 
 --- Get game ID from game.project.
--- @return string|nil game id or nil if not found
+-- @return string|nil game id or nil if not found or empty
 local function get_game_id()
     if editor.can_get("/game.project", "poki_auds.game_id") then
-        return editor.get("/game.project", "poki_auds.game_id")
+        local value = editor.get("/game.project", "poki_auds.game_id")
+        if value and value ~= "" then
+            return value
+        end
     end
     return nil
 end
@@ -137,19 +143,19 @@ end
 local function read_config()
     local game_id = get_game_id()
     if not game_id then
-        print("ERROR: Could not find poki.game_id in game.project")
+        print("ERROR: Could not find poki_auds.game_id in game.project")
         return
     end
 
     local config_key = get_remote_config_key()
     if not config_key then
-        print("ERROR: Could not find poki.remote_config_key in game.project")
+        print("ERROR: Could not find poki_auds.remote_config_key in game.project")
         return
     end
 
     local config_id = get_remote_config_id()
     if not config_id then
-        print("ERROR: Could not find poki.remote_config_id in game.project")
+        print("ERROR: Could not find poki_auds.remote_config_id in game.project")
         return
     end
 
@@ -163,14 +169,13 @@ local function read_config()
     poki_auds.fetch(config_key, config_id, function(self, success, result, resp)
         if not success then
             print("ERROR: Failed to fetch config from AUDS")
-            print("ERROR: " .. tostring(result))
             if resp and resp.status then
                 print("HTTP Status: " .. tostring(resp.status))
             end
             return
         end
 
-        print("\n=== Config fetched successfully ===\n")
+        print("=== Config fetched successfully ===")
 
         -- Pretty print the result
         if result and type(result.data) == "table" then
@@ -189,7 +194,7 @@ local function read_config()
             file:write(formatted)
             file:close()
 
-            print("\n=== Config saved to " .. file_path .. " ===\n")
+            print("=== Config saved to " .. file_path .. " ===")
         else
             print("WARNING: Result is empty or `data` is not a table")
         end
@@ -200,21 +205,17 @@ end
 local function save_config()
     local game_id = get_game_id()
     if not game_id then
-        print("ERROR: Could not find poki.game_id in game.project")
+        print("ERROR: Could not find poki_auds.game_id in game.project")
         return
     end
 
     local config_key = get_remote_config_key()
     if not config_key then
-        print("ERROR: Could not find poki.remote_config_key in game.project")
+        print("ERROR: Could not find poki_auds.remote_config_key in game.project")
         return
     end
 
     local config_id = get_remote_config_id()
-    if not config_id then
-        print("ERROR: Could not find poki.remote_config_id in game.project")
-        return
-    end
 
     -- Read file
     local file_path = get_config_file_path()
@@ -255,35 +256,99 @@ local function save_config()
         return
     end
 
-    print("\nUpdating config in AUDS...")
-    print(" - Game ID: " .. game_id)
-    print(" - Config Key: " .. config_key)
-    print(" - Config ID: " .. config_id)
-
     poki_auds.set_game_id(game_id)
 
-    -- Prepare update body
-    local update_body = {
-        secret = secret,
-        data = decoded,
-    }
+    if config_id then
+        -- Update existing config
+        print("\nUpdating config in AUDS...")
+        print(" - Game ID: " .. game_id)
+        print(" - Config Key: " .. config_key)
+        print(" - Config ID: " .. config_id)
 
-    poki_auds.update(config_key, config_id, update_body, function(self, success, result, resp)
-        if not success then
-            print("ERROR: Failed to update config in AUDS")
-            print("Error: " .. tostring(result))
-            if resp and resp.status then
-                print("HTTP Status: " .. tostring(resp.status))
+        local update_body = {
+            secret = secret,
+            data = decoded,
+        }
+
+        poki_auds.update(config_key, config_id, update_body, function(self, success, result, resp)
+            if not success then
+                print("ERROR: Failed to update config in AUDS")
+                if resp and resp.status then
+                    print("HTTP Status: " .. tostring(resp.status))
+                end
+                return
             end
-            return
-        end
 
-        print("\n=== Config updated successfully ===\n")
-        if result then
-            print("Response:")
-            print(pretty_print(result))
-        end
-    end)
+            print("=== Config updated successfully ===")
+            if result then
+                -- DEBUG:
+                -- print("Response:")
+                -- print(pretty_print(result))
+            end
+        end)
+    else
+        -- Create new config
+        print("\nCreating new config in AUDS...")
+        print(" - Game ID: " .. game_id)
+        print(" - Config Key: " .. config_key)
+        print(" - Config ID: (will be created)")
+
+        local create_body = {
+            secret = secret,
+            data = decoded,
+        }
+
+        poki_auds.create(config_key, create_body, function(self, success, result, resp)
+            if not success then
+                print("ERROR: Failed to create config in AUDS")
+                if resp and resp.status then
+                    print("HTTP Status: " .. tostring(resp.status))
+                end
+                return
+            end
+
+            print("=== Config created successfully ===")
+            if result then
+                -- DEBUG:
+                -- print("Response:")
+                -- print(pretty_print(result))
+
+                -- Save config_id to game.project if received from server
+                local new_config_id = result.id
+                if type(new_config_id) == "string" then
+                    if editor.can_set("/game.project", "poki_auds.remote_config_id") then
+                        editor.transact({
+                            editor.tx.set("/game.project", "poki_auds.remote_config_id", new_config_id)
+                        })
+                        print("=== Config ID saved to game.project: " .. new_config_id .. " ===")
+                    else
+                        print("WARNING: Could not save config_id to game.project (property not settable)")
+                        print("Config ID (save it!): " .. new_config_id)
+                    end
+                else
+                    print("WARNING: Server response does not contain valid 'id' field")
+                end
+
+                -- Save secret to file if received from server
+                local new_secret = result.secret
+                if type(new_secret) == "string" then
+                    local secret_file_path = get_secret_file_path()
+                    local secret_file, err = io.open(secret_file_path, "w")
+                    if secret_file then
+                        secret_file:write(new_secret)
+                        secret_file:close()
+                        print("=== Secret saved to " .. secret_file_path .. " ===")
+                    else
+                        print("WARNING: Could not save secret to file: " .. tostring(err))
+                        print("File path: " .. secret_file_path)
+                        print("Secret (save it!): " .. new_secret)
+                    end
+                else
+                    print("WARNING: Server response does not contain valid 'secret' field")
+                end
+            end
+        end)
+    end
 end
 
 function M.get_commands()

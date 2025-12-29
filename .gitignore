@@ -9,5 +9,4 @@ Thumbs.db
 .project
 .cproject
 builtins
-/remote_config.json
 /remote_config.secret

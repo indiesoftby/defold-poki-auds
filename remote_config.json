@@ -1,0 +1,15 @@
+{
+  "test_string": "A",
+  "test_boolean": true,
+  "test_array": [
+    1,
+    2,
+    3
+  ],
+  "test_number": 1,
+  "test_object": {
+    "test_number": 1,
+    "test_string": "A",
+    "test_boolean": true
+  }
+}
