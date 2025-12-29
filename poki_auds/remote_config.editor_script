@@ -1,0 +1,314 @@
+--- Remote Config Editor Script for Poki AUDS.
+-- Provides commands to read and save remote config from/to Poki AUDS.
+--
+-- @module remote_config
+
+local M = {}
+
+local poki_auds = require("poki_auds.auds")
+
+--- Get path to config file from game.project.
+-- @return string Path to config file
+local function get_config_file_path()
+    if editor.can_get("/game.project", "poki_auds.remote_config_json_file") then
+        return editor.get("/game.project", "poki_auds.remote_config_json_file")
+    end
+    return "/remote_config.json"
+end
+
+--- Get path to secret file from game.project.
+-- @return string Path to secret file
+local function get_secret_file_path()
+    if editor.can_get("/game.project", "poki_auds.remote_config_secret_file") then
+        return editor.get("/game.project", "poki_auds.remote_config_secret_file")
+    end
+    return "/remote_config.secret"
+end
+
+--- Get remote config ID from game.project.
+-- @return string|nil config id or nil if not found
+local function get_remote_config_id()
+    if editor.can_get("/game.project", "poki_auds.remote_config_id") then
+        return editor.get("/game.project", "poki_auds.remote_config_id")
+    end
+    return nil
+end
+
+--- Get remote config key from game.project.
+-- @return string|nil remote config key or nil if not found
+local function get_remote_config_key()
+    if editor.can_get("/game.project", "poki_auds.remote_config_key") then
+        return editor.get("/game.project", "poki_auds.remote_config_key")
+    end
+    return "config"
+end
+
+--- Get game ID from game.project.
+-- @return string|nil game id or nil if not found
+local function get_game_id()
+    if editor.can_get("/game.project", "poki_auds.game_id") then
+        return editor.get("/game.project", "poki_auds.game_id")
+    end
+    return nil
+end
+
+--- Get secret from file.
+-- @return string|nil secret or nil if not found
+local function get_secret()
+    local file, err = io.open(get_secret_file_path(), "r")
+    if not file then
+        return nil
+    end
+    local content = file:read("*a")
+    file:close()
+    if not content or content == "" then
+        return nil
+    end
+    -- Trim whitespace (Lua 5.1 doesn't have string:trim())
+    content = string.match(content, "^%s*(.-)%s*$")
+    return content
+end
+
+--- Pretty print a Lua table as JSON-like string.
+-- @param tbl table Table to format
+-- @param indent number Current indentation level
+-- @return string Formatted string
+local function pretty_print(tbl, indent)
+    indent = indent or 0
+    local indent_str = string.rep("  ", indent)
+    local result = {}
+
+    if type(tbl) ~= "table" then
+        if type(tbl) == "string" then
+            return "\"" .. tbl .. "\""
+        else
+            return tostring(tbl)
+        end
+    end
+
+    local is_array = false
+    local max_index = 0
+    for k, _ in pairs(tbl) do
+        if type(k) == "number" then
+            max_index = math.max(max_index, k)
+            is_array = true
+        else
+            is_array = false
+            break
+        end
+    end
+
+    if is_array and max_index == #tbl then
+        -- Array-like table
+        table.insert(result, "[\n")
+        for i = 1, #tbl do
+            table.insert(result, indent_str .. "  ")
+            table.insert(result, pretty_print(tbl[i], indent + 1))
+            if i < #tbl then
+                table.insert(result, ",")
+            end
+            table.insert(result, "\n")
+        end
+        table.insert(result, indent_str .. "]")
+    else
+        -- Object-like table
+        table.insert(result, "{\n")
+        local first = true
+        for k, v in pairs(tbl) do
+            if not first then
+                table.insert(result, ",\n")
+            end
+            first = false
+            table.insert(result, indent_str .. "  ")
+            if type(k) == "string" then
+                table.insert(result, "\"" .. k .. "\": ")
+            else
+                table.insert(result, tostring(k) .. ": ")
+            end
+            table.insert(result, pretty_print(v, indent + 1))
+        end
+        table.insert(result, "\n" .. indent_str .. "}")
+    end
+
+    return table.concat(result)
+end
+
+--- Read config from AUDS and save to file.
+local function read_config()
+    local game_id = get_game_id()
+    if not game_id then
+        print("ERROR: Could not find poki.game_id in game.project")
+        return
+    end
+
+    local config_key = get_remote_config_key()
+    if not config_key then
+        print("ERROR: Could not find poki.remote_config_key in game.project")
+        return
+    end
+
+    local config_id = get_remote_config_id()
+    if not config_id then
+        print("ERROR: Could not find poki.remote_config_id in game.project")
+        return
+    end
+
+    poki_auds.set_game_id(game_id)
+
+    print("Fetching config from AUDS...")
+    print(" - Game ID: " .. game_id)
+    print(" - Config Key: " .. config_key)
+    print(" - Config ID: " .. config_id)
+    
+    poki_auds.fetch(config_key, config_id, function(self, success, result, resp)
+        if not success then
+            print("ERROR: Failed to fetch config from AUDS")
+            print("ERROR: " .. tostring(result))
+            if resp and resp.status then
+                print("HTTP Status: " .. tostring(resp.status))
+            end
+            return
+        end
+
+        print("\n=== Config fetched successfully ===\n")
+
+        -- Pretty print the result
+        if result and type(result.data) == "table" then
+            local formatted = pretty_print(result.data)
+            print(formatted)
+
+            -- Save to file
+            local file_path = get_config_file_path()
+            local file, err = io.open(file_path, "w")
+            if not file then
+                print("ERROR: Could not open file for writing: " .. tostring(err))
+                return
+            end
+
+            -- Write to file
+            file:write(formatted)
+            file:close()
+
+            print("\n=== Config saved to " .. file_path .. " ===\n")
+        else
+            print("WARNING: Result is empty or `data` is not a table")
+        end
+    end)
+end
+
+--- Save config from file to AUDS.
+local function save_config()
+    local game_id = get_game_id()
+    if not game_id then
+        print("ERROR: Could not find poki.game_id in game.project")
+        return
+    end
+
+    local config_key = get_remote_config_key()
+    if not config_key then
+        print("ERROR: Could not find poki.remote_config_key in game.project")
+        return
+    end
+
+    local config_id = get_remote_config_id()
+    if not config_id then
+        print("ERROR: Could not find poki.remote_config_id in game.project")
+        return
+    end
+
+    -- Read file
+    local file_path = get_config_file_path()
+    local file, err = io.open(file_path, "r")
+    if not file then
+        print("ERROR: Could not open file for reading: " .. tostring(err))
+        print("File path: " .. file_path)
+        return
+    end
+
+    local content = file:read("*a")
+    file:close()
+
+    if not content or content == "" then
+        print("ERROR: File is empty")
+        return
+    end
+
+    -- Decode JSON
+    local ok, decoded = pcall(json.decode, content)
+    if not ok then
+        print("ERROR: Failed to decode JSON from file")
+        print("Error: " .. tostring(decoded))
+        return
+    end
+
+    if type(decoded) ~= "table" then
+        print("ERROR: Decoded JSON is not a table")
+        return
+    end
+
+    print("Loaded config from file:")
+    print(pretty_print(decoded))
+
+    local secret = get_secret()
+    if not secret then
+        print("ERROR: Could not find secret in " .. get_secret_file_path())
+        return
+    end
+
+    print("\nUpdating config in AUDS...")
+    print(" - Game ID: " .. game_id)
+    print(" - Config Key: " .. config_key)
+    print(" - Config ID: " .. config_id)
+
+    poki_auds.set_game_id(game_id)
+
+    -- Prepare update body
+    local update_body = {
+        secret = secret,
+        data = decoded,
+    }
+
+    poki_auds.update(config_key, config_id, update_body, function(self, success, result, resp)
+        if not success then
+            print("ERROR: Failed to update config in AUDS")
+            print("Error: " .. tostring(result))
+            if resp and resp.status then
+                print("HTTP Status: " .. tostring(resp.status))
+            end
+            return
+        end
+
+        print("\n=== Config updated successfully ===\n")
+        if result then
+            print("Response:")
+            print(pretty_print(result))
+        end
+    end)
+end
+
+function M.get_commands()
+    return {
+        {
+            label = "Poki AUDS: Read Config",
+            locations = { "Project" },
+            active = function(_opts)
+                return true
+            end,
+            run = function(_opts)
+                read_config()
+            end
+        },
+        {
+            label = "Poki AUDS: Save Config",
+            locations = { "Project" },
+            active = function(_opts)
+                return true
+            end,
+            run = function(_opts)
+                save_config()
+            end
+        }
+    }
+end
+
+return M
