@@ -9,8 +9,6 @@
 
 local M = {}
 
-local BASE_URL = "https://auds.poki.io/v0"
-
 -- Check if running in editor scripts environment
 local is_editor = type(editor) ~= "nil"
 
@@ -25,6 +23,8 @@ local is_editor = type(editor) ~= "nil"
 -- Mutable configuration
 local current_game_id = nil
 local current_admin_token = nil
+local custom_http_request_fn = nil
+local current_base_url = "https://auds.poki.io/v0"
 
 --- Set Poki game id used in all requests.
 -- @param string game_id Your Poki game id
@@ -49,6 +49,32 @@ end
 -- @return string|nil admin token or nil if not set
 function M.get_admin_token()
     return current_admin_token
+end
+
+--- Set custom HTTP request function to replace default http.request.
+-- Custom function should have the same signature as http.request:
+--   Editor: fn(url, opts) -> response (synchronous)
+--   Runtime: fn(url, method, callback, headers, post_data, options) (asynchronous)
+-- Pass nil to use default http.request.
+-- @param function|nil fn Custom HTTP request function (nil to use default)
+function M.set_http_request_fn(fn)
+    if fn ~= nil and type(fn) ~= "function" then
+        error("http_request_fn must be a function or nil")
+    end
+    custom_http_request_fn = fn
+end
+
+--- Set base URL for Poki AUDS API.
+-- @param string base_url Base URL
+function M.set_base_url(base_url)
+    assert(type(base_url) == "string" and base_url ~= "", "base_url must be a non-empty string")
+    current_base_url = base_url
+end
+
+--- Get currently configured base URL.
+-- @return string base URL
+function M.get_base_url()
+    return current_base_url
 end
 
 -- Internal helpers
@@ -78,7 +104,7 @@ local function build_url(path, params)
     if not current_game_id or current_game_id == "" then
         return nil, "Poki AUDS: game id is not set. Call set_game_id()."
     end
-    local url = string.format("%s/%s%s", BASE_URL, current_game_id, path)
+    local url = string.format("%s/%s%s", current_base_url, current_game_id, path)
     local query = build_query(params)
     return url .. query
 end
@@ -193,6 +219,8 @@ local function perform_request(method, path, query_params, body_tbl, callback)
 
     local headers = make_headers(post_data ~= nil)
 
+    local http_fn = custom_http_request_fn or http.request
+
     if is_editor then
         -- Editor scripts: synchronous http.request
         local opts = {
@@ -202,7 +230,7 @@ local function perform_request(method, path, query_params, body_tbl, callback)
             as = "json" -- Request JSON parsing
         }
 
-        local ok_req, response = pcall(http.request, url_or_nil, opts)
+        local ok_req, response = pcall(http_fn, url_or_nil, opts)
         if not ok_req then
             invoke_callback(nil, callback, false, "HTTP request failed: " .. tostring(response), nil, true)
             return
@@ -225,7 +253,7 @@ local function perform_request(method, path, query_params, body_tbl, callback)
         end
     else
         -- Runtime: asynchronous http.request
-        http.request(url_or_nil, method, function(self, _, response)
+        http_fn(url_or_nil, method, function(self, _, response)
             local decoded = decode_json_if_any(response, false)
             local status = response and response.status or 0
             local ok_http = status >= 200 and status < 300
