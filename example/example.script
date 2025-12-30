@@ -1,4 +1,30 @@
+local auds = require("poki_auds.auds")
+
 function init(self)
+    -- Example: Get remote config from AUDS
+    local config_id = sys.get_config_string("poki_auds.remote_config_id")
+    if not config_id then
+        error("remote_config_id not set in game.project")
+    end
+    local config_key = sys.get_config_string("poki_auds.remote_config_key", "config")
+
+    print("Fetching remote config...")
+    auds.fetch(config_key, config_id, function(self, success, result, resp)
+        if success then
+            print("=== Remote config fetched successfully ===")
+            if result and result.data then
+                pprint(result.data)
+            else
+                print("WARNING: Config data is empty")
+            end
+        else
+            print("ERROR: Failed to fetch remote config")
+            print("Error: " .. tostring(result))
+            if resp and resp.status then
+                print("HTTP Status: " .. tostring(resp.status))
+            end
+        end
+    end)
 end
 
 function final(self)
