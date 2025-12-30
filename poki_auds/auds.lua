@@ -23,7 +23,7 @@ local is_editor = type(editor) ~= "nil"
 -- Mutable configuration
 local current_game_id = sys.get_config_string("poki_auds.game_id")
 local current_admin_token = nil
-local custom_http_request_fn = nil
+local http_fn = http.request
 local current_base_url = "https://auds.poki.io/v0"
 
 --- Set Poki game id used in all requests.
@@ -61,7 +61,7 @@ function M.set_http_request_fn(fn)
     if fn ~= nil and type(fn) ~= "function" then
         error("http_request_fn must be a function or nil")
     end
-    custom_http_request_fn = fn
+    http_fn = fn
 end
 
 --- Set base URL for Poki AUDS API.
@@ -219,8 +219,6 @@ local function perform_request(method, path, query_params, body_tbl, callback)
 
     local headers = make_headers(post_data ~= nil)
 
-    local http_fn = custom_http_request_fn or http.request
-
     if is_editor then
         -- Editor scripts: synchronous http.request
         local opts = {
@@ -260,7 +258,7 @@ local function perform_request(method, path, query_params, body_tbl, callback)
             if ok_http then
                 invoke_callback(self, callback, true, decoded, response, false)
             else
-                local err_msg = decoded and (decoded.error or decoded.message) or (response and response.response) or ("HTTP " .. tostring(status))
+                local err_msg = decoded and (decoded.error or decoded.message or decoded.key) or (response and response.response) or ("HTTP " .. tostring(status))
                 invoke_callback(self, callback, false, err_msg, response, false)
             end
         end, headers, post_data, nil)
