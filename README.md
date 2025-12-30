@@ -1,8 +1,16 @@
-# Poki AUDS (Defold Lua module)
+# Poki AUDS for Defold
 
 Lua module for Poki AUDS (Arbitrary User Data Store) using Defold's `http.request`.
 
 Reference API: [Poki AUDS docs](https://sdk.poki.com/auds.html)
+
+## What is AUDS?
+
+AUDS (Arbitrary User Data Store) is a service that allows you to store and retrieve arbitrary data for your Poki games. Common use cases include:
+
+- **Player levels**: Store user-generated levels and content that can be shared and played by other players
+- **Leaderboards**: Create custom leaderboards
+- **Remote config**: Store game configuration that can be updated without rebuilding the game (this module includes example code and convenient editor scripts for working with remote config)
 
 ## Installation
 
@@ -15,6 +23,7 @@ Click `Project->Fetch Libraries` once you have added the version to `game.projec
 ```lua
 local auds = require("poki_auds.auds")
 
+-- By default, the module will use the game id from `game.project` but you can set it manually if needed
 auds.set_game_id("your-poki-game-id")
 
 -- Optional: use admin token instead of per-item secrets
@@ -26,7 +35,7 @@ auds.set_admin_token("YOUR_ADMIN_TOKEN")
 ```lua
 local auds = require("poki_auds.auds")
 
-auds.set_game_id("your-poki-game-id")
+-- auds.set_game_id("your-poki-game-id")
 -- auds.set_admin_token("YOUR_ADMIN_TOKEN") -- optional
 
 -- Create
@@ -86,9 +95,61 @@ function callback(self, success, result, resp) end
 
 ## Notes
 
+- By default, the module will use the game id from `game.project` but you can set it manually if needed.
 - If `set_admin_token` is set, the module sends `Authorization: AdminToken <token>` on requests.
 - For update/delete: if no admin token is set, provide `secret` in the request body.
 - Per Poki docs, AUDS is in development and subject to change.
+
+## Remote Config
+
+The module provides a helper for working with remote config stored in AUDS.
+
+### Setup
+
+1. In Poki for Developers, go to **Settings / Integrations** for your game and copy the AUDS admin token. Save it to a secure location.
+2. Copy your Poki game ID from the same location.
+3. Set the game ID in `game.project`:
+   ```ini
+   [poki_auds]
+   game_id = your-poki-game-id
+   ```
+4. Create a `remote_config.json` file in the root of your project (or use a different name/path and update `game.project` accordingly):
+   ```json
+   {
+     "test_string": "A",
+     "test_boolean": true,
+     "test_number": 1
+   }
+   ```
+5. In the IDE, select **Project / Poki AUDS: Save Config** - the script will save the JSON to AUDS, store the configuration ID in `game.project` as `poki_auds.remote_config_id`, and save the secret to `remote_config.secret` file in the root of your project.
+6. You can now use the remote config in your game!
+
+Note: keep the secret - otherwise you will need to use the admin token to update or delete the config.
+
+### Usage in Game
+
+You can load the config in your game. See example in `example/example.script`:
+
+```lua
+local auds = require("poki_auds.auds")
+
+function init(self)
+    local config_id = sys.get_config_string("poki_auds.remote_config_id")
+    local config_key = sys.get_config_string("poki_auds.remote_config_key", "config")
+
+    auds.fetch(config_key, config_id, function(self, ok, result, resp)
+        if ok then
+            pprint(result.data)
+        else
+            print("ERROR: Failed to fetch remote config")
+            print("Error: " .. tostring(result))
+            if resp and resp.status then
+                print("HTTP Status: " .. tostring(resp.status))
+            end
+        end
+    end)
+end
+```
 
 ## License
 
