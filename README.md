@@ -26,8 +26,8 @@ local auds = require("poki_auds.auds")
 -- By default, the module will use the game id from `game.project` but you can set it manually if needed
 auds.set_game_id("your-poki-game-id")
 
--- Optional: use admin token instead of per-item secrets
-auds.set_admin_token("YOUR_ADMIN_TOKEN")
+-- Optional: use admin token instead of per-item secrets (ONLY for trusted environments - see notes below)
+-- auds.set_admin_token("YOUR_ADMIN_TOKEN")
 ```
 
 ## Usage
@@ -36,7 +36,6 @@ auds.set_admin_token("YOUR_ADMIN_TOKEN")
 local auds = require("poki_auds.auds")
 
 -- auds.set_game_id("your-poki-game-id")
--- auds.set_admin_token("YOUR_ADMIN_TOKEN") -- optional
 
 -- Create
 auds.create("tests", {
@@ -58,7 +57,7 @@ end)
 
 -- Update (with secret in body OR via admin token header)
 auds.update("tests", "<id>", {
-    -- secret = "<SECRET_FROM_CREATE>", -- not needed if admin token set
+    secret = "<SECRET_FROM_CREATE>", -- not needed if admin token set
     data = { tiles = {1, 1, 0} },
     values = { levelname = "Edited", type = "arena-1v1" }
 }, function(self, ok, res, resp)
@@ -66,7 +65,7 @@ auds.update("tests", "<id>", {
 end)
 
 -- Delete (with secret in body OR via admin token header)
-auds.delete("tests", "<id>", nil, function(self, ok, _, resp)
+auds.delete("tests", "<id>", "<SECRET_FROM_CREATE>", function(self, ok, _, resp)
     print(ok, resp.status)
 end)
 ```
@@ -74,7 +73,7 @@ end)
 ## API
 
 - `set_game_id(game_id)` / `get_game_id()`
-- `set_admin_token(token)` / `get_admin_token()`
+- `set_admin_token(token)` / `get_admin_token()` - **⚠️ SECURITY WARNING**: Never use in production game code! See Notes section.
 - `create(freeform_key, body, callback)`
 - `fetch(freeform_key, id, callback)`
 - `list(freeform_key, params, callback)`
@@ -96,6 +95,7 @@ function callback(self, success, result, resp) end
 ## Notes
 
 - By default, the module will use the game id from `game.project` but you can set it manually if needed.
+- **⚠️ SECURITY WARNING**: `set_admin_token()` grants full administrative access to ALL data in your AUDS store. **NEVER** use it in production game code that ships to players. Only use it in secure server-side code or editor scripts. If the admin token is exposed, anyone can modify or delete any data for your game. Use per-item `secret` values instead for production code.
 - If `set_admin_token` is set, the module sends `Authorization: AdminToken <token>` on requests.
 - For update/delete: if no admin token is set, provide `secret` in the request body.
 - Per Poki docs, AUDS is in development and subject to change.

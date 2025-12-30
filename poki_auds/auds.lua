@@ -43,6 +43,20 @@ end
 
 --- Set Admin token to authorize update/delete requests via header.
 -- If set, the module will send header `Authorization: AdminToken <token>`.
+--
+-- ⚠️ SECURITY WARNING ⚠️
+-- This function grants FULL ADMINISTRATIVE ACCESS to ALL data in your AUDS store.
+-- Anyone with this token can modify or delete ANY data for your game.
+--
+-- NEVER use this function in production game code that is distributed to players.
+-- ONLY use it in:
+--   - Secure server-side code
+--   - Editor scripts (that never ship with your game)
+--   - Development/testing environments
+--
+-- For production code, use per-item `secret` values instead (returned by `create()`).
+-- If you must use admin token, ensure it is stored securely and never exposed in client code.
+--
 -- @param string|nil token Admin token (nil to clear)
 function M.set_admin_token(token)
     current_admin_token = token
