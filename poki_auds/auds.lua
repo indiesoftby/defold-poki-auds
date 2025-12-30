@@ -21,7 +21,7 @@ local is_editor = type(editor) ~= "nil"
 ---@alias PokiAudsCallback fun(self:table, success:boolean, result_or_error:any|nil, resp:PokiAudsResponse)
 
 -- Mutable configuration
-local current_game_id = nil
+local current_game_id = sys.get_config_string("poki_auds.game_id")
 local current_admin_token = nil
 local custom_http_request_fn = nil
 local current_base_url = "https://auds.poki.io/v0"
