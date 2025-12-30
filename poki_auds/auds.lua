@@ -18,7 +18,7 @@ local is_editor = type(editor) ~= "nil"
 ---@field raw string|nil Raw response body (string)
 ---@field json any|nil Decoded JSON value if available
 
----@alias PokiAudsCallback fun(self:table, success:boolean, result:any|nil, resp:PokiAudsResponse)
+---@alias PokiAudsCallback fun(self:table, success:boolean, result_or_error:any|nil, resp:PokiAudsResponse)
 
 -- Mutable configuration
 local current_game_id = nil
