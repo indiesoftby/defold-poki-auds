@@ -151,6 +151,64 @@ function init(self)
 end
 ```
 
+### Pro Tip
+
+For faster startup times, you can load the remote config directly in JavaScript before the Defold engine finishes loading. This eliminates the need for an HTTP request from Lua and makes the config available immediately when your game starts.
+
+Add this code to your `engine_template.html` (located in `builtins/manifests/` or your custom template):
+
+```html
+<script>
+(function() {
+    // Load remote config before Defold engine starts
+    // {{#poki_auds.game_id}}
+    // {{#poki_auds.remote_config_id}}
+    const gameId = '{{poki_auds.game_id}}';
+    const configKey = '{{poki_auds.remote_config_key}}';
+    const configId = '{{poki_auds.remote_config_id}}';
+    
+    fetch(`https://auds.poki.io/v0/${gameId}/userdata/${configKey}/${configId}`)
+        .then(response => response.text())
+        .then(result => {
+            // Store config in window for Defold to access
+            window.pokiRemoteConfig = result;
+        })
+        .catch(error => {
+            console.warn('Failed to load remote config:', error);
+        });
+    // {{/poki_auds.remote_config_id}}
+    // {{/poki_auds.game_id}}
+})();
+</script>
+```
+
+Then in your Lua code, you can access the config:
+
+```lua
+function init(self)
+    local config = nil
+
+    -- Check if config was loaded via JavaScript
+    if html5 then
+        local config_json = html5.run("window.pokiRemoteConfig || ''")
+        if config_json ~= "" then
+            local config_obj = json.decode(config_json)
+
+            -- Use your config here - config_obj.data is the JSON object
+            config = config_obj.data
+            -- pprint(config)
+        end
+    end
+
+    if not config then
+        -- No config loaded via JavaScript, so fetch from AUDS in Lua
+        -- (see the example above)
+    end
+end
+```
+
+**Note**: The mustache tags `{{poki_auds.game_id}}`, `{{poki_auds.remote_config_key}}`, and `{{poki_auds.remote_config_id}}` will be automatically replaced with values from your `game.project` file when Defold builds your game.
+
 ## License
 
 This repository is distributed under the CC0 license; see the [LICENSE.md](LICENSE.md) file for details.
