@@ -58,9 +58,9 @@ end
 -- For production code, use per-item `secret` values instead (returned by `create()`).
 -- If you must use admin token, ensure it is stored securely and never exposed in client code.
 --
--- @param string|nil token Admin token (nil to clear)
+-- @param string|nil token Admin token (nil or empty string to clear)
 function M.set_admin_token(token)
-    current_admin_token = token
+    current_admin_token = (token and token ~= "") and token or nil
 end
 
 --- Get currently configured Admin token.
@@ -72,9 +72,9 @@ end
 --- Set Bearer token (Poki for Developers JWT) for authorization.
 -- If set, the module will send header `Authorization: Bearer <token>`.
 -- Note: Admin token takes precedence if both are set.
--- @param string|nil token Bearer JWT token (nil to clear)
+-- @param string|nil token Bearer JWT token (nil or empty string to clear)
 function M.set_bearer_token(token)
-    current_bearer_token = token
+    current_bearer_token = (token and token ~= "") and token or nil
 end
 
 --- Get currently configured Bearer token.
@@ -148,9 +148,9 @@ local function make_headers(has_body)
     if has_body then
         headers["Content-Type"] = "application/json"
     end
-    if current_admin_token and current_admin_token ~= "" then
+    if current_admin_token then
         headers["Authorization"] = "AdminToken " .. current_admin_token
-    elseif current_bearer_token and current_bearer_token ~= "" then
+    elseif current_bearer_token then
         headers["Authorization"] = "Bearer " .. current_bearer_token
     end
     return headers
@@ -376,7 +376,7 @@ function M.delete(freeform_key, id, secret, callback)
     assert(type(freeform_key) == "string" and freeform_key ~= "", "freeform_key must be a non-empty string")
     assert(type(id) == "string" and id ~= "", "id must be a non-empty string")
     local body = nil
-    if (not current_admin_token or current_admin_token == "") and secret and secret ~= "" then
+    if not current_admin_token and secret and secret ~= "" then
         body = { secret = secret }
     end
     perform_request("DELETE", string.format("/userdata/%s/%s", url_encode(freeform_key), url_encode(id)), nil, body, callback)
