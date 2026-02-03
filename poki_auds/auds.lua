@@ -26,6 +26,7 @@ if not is_editor and sys and sys.get_config_string then
     current_game_id = sys.get_config_string("poki_auds.game_id")
 end
 local current_admin_token = nil
+local current_bearer_token = nil
 local http_fn = http.request
 local current_base_url = "https://auds.poki.io/v0"
 
@@ -66,6 +67,20 @@ end
 -- @return string|nil admin token or nil if not set
 function M.get_admin_token()
     return current_admin_token
+end
+
+--- Set Bearer token (Poki for Developers JWT) for authorization.
+-- If set, the module will send header `Authorization: Bearer <token>`.
+-- Note: Admin token takes precedence if both are set.
+-- @param string|nil token Bearer JWT token (nil to clear)
+function M.set_bearer_token(token)
+    current_bearer_token = token
+end
+
+--- Get currently configured Bearer token.
+-- @return string|nil bearer token or nil if not set
+function M.get_bearer_token()
+    return current_bearer_token
 end
 
 --- Set custom HTTP request function to replace default http.request.
@@ -135,6 +150,8 @@ local function make_headers(has_body)
     end
     if current_admin_token and current_admin_token ~= "" then
         headers["Authorization"] = "AdminToken " .. current_admin_token
+    elseif current_bearer_token and current_bearer_token ~= "" then
+        headers["Authorization"] = "Bearer " .. current_bearer_token
     end
     return headers
 end
@@ -363,6 +380,39 @@ function M.delete(freeform_key, id, secret, callback)
         body = { secret = secret }
     end
     perform_request("DELETE", string.format("/userdata/%s/%s", url_encode(freeform_key), url_encode(id)), nil, body, callback)
+end
+
+--- Increment a counter value.
+-- POST /userdata/<freeform-key>/<id>/_increment?key=<value-key>
+-- No secret or authorization required. The key must contain "count" (e.g. "play-count").
+-- The existing value must be a number. The counter increases by 1.
+-- @param string freeform_key Resource group name
+-- @param string id Item id
+-- @param string key Value key to increment (must contain "count")
+-- @param PokiAudsCallback callback Callback receiving (success, result, response)
+function M.increment(freeform_key, id, key, callback)
+    assert(type(freeform_key) == "string" and freeform_key ~= "", "freeform_key must be a non-empty string")
+    assert(type(id) == "string" and id ~= "", "id must be a non-empty string")
+    assert(type(key) == "string" and key ~= "", "key must be a non-empty string")
+    local path = string.format("/userdata/%s/%s/_increment", url_encode(freeform_key), url_encode(id))
+    perform_request("POST", path, { key = key }, nil, callback)
+end
+
+--- Vote on a value.
+-- POST /userdata/<freeform-key>/<id>/_vote?key=<value-key>
+-- No secret or authorization required. Voting is limited to once per IP address,
+-- per value key, per day. Duplicate votes return 409 already-voted.
+-- The existing value must be a number.
+-- @param string freeform_key Resource group name
+-- @param string id Item id
+-- @param string key Value key to vote on (e.g. "up-vote", "down-vote")
+-- @param PokiAudsCallback callback Callback receiving (success, result, response)
+function M.vote(freeform_key, id, key, callback)
+    assert(type(freeform_key) == "string" and freeform_key ~= "", "freeform_key must be a non-empty string")
+    assert(type(id) == "string" and id ~= "", "id must be a non-empty string")
+    assert(type(key) == "string" and key ~= "", "key must be a non-empty string")
+    local path = string.format("/userdata/%s/%s/_vote", url_encode(freeform_key), url_encode(id))
+    perform_request("POST", path, { key = key }, nil, callback)
 end
 
 return M
