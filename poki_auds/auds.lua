@@ -352,7 +352,7 @@ end
 
 --- Update userdata by id.
 -- POST /userdata/<freeform-key>/<id>
--- Provide either a `secret` field in body or set Admin token via `set_admin_token`.
+-- Provide either a `secret` field in body or set Admin/Bearer token via `set_admin_token`/`set_bearer_token`.
 -- Only provided keys are updated.
 -- @param string freeform_key Resource group name
 -- @param string id Item id
@@ -367,7 +367,7 @@ end
 
 --- Delete userdata by id.
 -- DELETE /userdata/<freeform-key>/<id>
--- Provide `secret` in body or set Admin token via `set_admin_token`.
+-- Provide `secret` in body or set Admin/Bearer token via `set_admin_token`/`set_bearer_token`.
 -- @param string freeform_key Resource group name
 -- @param string id Item id
 -- @param string|nil secret Optional secret string; ignored if Admin token is set
@@ -376,7 +376,7 @@ function M.delete(freeform_key, id, secret, callback)
     assert(type(freeform_key) == "string" and freeform_key ~= "", "freeform_key must be a non-empty string")
     assert(type(id) == "string" and id ~= "", "id must be a non-empty string")
     local body = nil
-    if not current_admin_token and secret and secret ~= "" then
+    if not current_admin_token and not current_bearer_token and secret and secret ~= "" then
         body = { secret = secret }
     end
     perform_request("DELETE", string.format("/userdata/%s/%s", url_encode(freeform_key), url_encode(id)), nil, body, callback)
