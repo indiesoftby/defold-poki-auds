@@ -28,6 +28,7 @@
 - **Whitespace**:
   - Empty lines must be truly empty (no spaces/tabs).
   - Avoid trailing whitespace.
+- **Git commit messages**: use the format `Short description in a single sentence`, in English language ONLY.
 
 ## Local build / smoke-test via bob.jar
 
