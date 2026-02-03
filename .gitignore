@@ -10,3 +10,5 @@ Thumbs.db
 .cproject
 builtins
 /remote_config.secret
+manifest.private.der
+manifest.public.der
