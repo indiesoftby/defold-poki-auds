@@ -11,6 +11,7 @@ AUDS (Arbitrary User Data Store) is a service that allows you to store and retri
 - **Player levels**: Store user-generated levels and content that can be shared and played by other players
 - **Leaderboards**: Create custom leaderboards
 - **Remote config**: Store game configuration that can be updated without rebuilding the game (this module includes example code and convenient editor scripts for working with remote config)
+- **Analytics**: Track level play counts, votes, and other metrics using built-in increment and vote endpoints
 
 ## Installation
 
@@ -28,6 +29,9 @@ auds.set_game_id("your-poki-game-id")
 
 -- Optional: use admin token instead of per-item secrets (ONLY for trusted environments - see notes below)
 -- auds.set_admin_token("YOUR_ADMIN_TOKEN")
+
+-- Optional: use Poki for Developers JWT for authorization
+-- auds.set_bearer_token("YOUR_JWT_TOKEN")
 ```
 
 ## Usage
@@ -64,9 +68,21 @@ auds.update("tests", "<id>", {
     pprint(ok and res or resp.status)
 end)
 
--- Delete (with secret in body OR via admin token header)
+-- Delete (with secret in body OR via admin/bearer token header)
 auds.delete("tests", "<id>", "<SECRET_FROM_CREATE>", function(self, ok, _, resp)
     print(ok, resp.status)
+end)
+
+-- Increment a counter (no secret required, key must contain "count")
+auds.increment("tests", "<id>", "play-count", function(self, ok, res)
+    pprint(res)
+end)
+
+-- Vote on a value (once per IP per day, no secret required)
+auds.vote("tests", "<id>", "up-vote", function(self, ok, res, resp)
+    if resp.status == 409 then
+        print("Already voted today")
+    end
 end)
 ```
 
@@ -74,13 +90,16 @@ end)
 
 - `set_game_id(game_id)` / `get_game_id()`
 - `set_admin_token(token)` / `get_admin_token()` - **⚠️ SECURITY WARNING**: Never use in production game code! See Notes section.
+- `set_bearer_token(token)` / `get_bearer_token()` - Set Poki for Developers JWT for authorization
 - `create(freeform_key, body, callback)`
 - `fetch(freeform_key, id, callback)`
 - `list(freeform_key, params, callback)`
-  - `params` example: `{ q = "type:arena-1v1", sort = "-created_at", includedata = true }`
+  - `params` example: `{ q = "type:arena-1v1", sort = "-created_at", includedata = true, limit = 10 }`
 - `update(freeform_key, id, body, callback)`
   - `body` may include: `secret`, `data`, `values`
 - `delete(freeform_key, id, secret, callback)`
+- `increment(freeform_key, id, key, callback)` - Increment a counter (key must contain "count", no secret required)
+- `vote(freeform_key, id, key, callback)` - Vote on a value (once per IP per day, no secret required)
 
 ## Callback signature
 
@@ -96,8 +115,10 @@ function callback(self, success, result, resp) end
 
 - By default, the module will use the game id from `game.project` but you can set it manually if needed.
 - **⚠️ SECURITY WARNING**: `set_admin_token()` grants full administrative access to ALL data in your AUDS store. **NEVER** use it in production game code that ships to players. Only use it in secure server-side code or editor scripts. If the admin token is exposed, anyone can modify or delete any data for your game. Use per-item `secret` values instead for production code.
-- If `set_admin_token` is set, the module sends `Authorization: AdminToken <token>` on requests.
-- For update/delete: if no admin token is set, provide `secret` in the request body.
+- Authorization priority: Admin token → Bearer token → secret in body.
+- If `set_admin_token` is set, the module sends `Authorization: AdminToken <token>` header.
+- If `set_bearer_token` is set (and no admin token), the module sends `Authorization: Bearer <token>` header.
+- For update/delete: if no token is set, provide `secret` in the request body.
 - Per Poki docs, AUDS is in development and subject to change.
 
 ## Remote Config
